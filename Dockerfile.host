@@ -1,0 +1,23 @@
+FROM ubuntu
+
+RUN apt-get update && \
+    apt-get install -y \
+            iputils-ping \
+            iputils-arping \
+            traceroute \
+	    iproute2 \
+            net-tools \
+	    openssh-client \
+	    openssh-server \
+	    sshpass \
+	    sudo
+
+RUN useradd -rm mnhost && usermod -aG sudo mnhost
+
+RUN echo 'mnhost:mnhost' | chpasswd
+
+RUN echo "mnhost ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+EXPOSE 22
+
+CMD ["/usr/sbin/sshd", "-D"]
