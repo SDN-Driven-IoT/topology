@@ -15,32 +15,73 @@ def customSDNTopo():
     controller3 = net.addController('c3', ip='127.0.0.1', port=6655)
 
     info('*** Adding Docker Hosts (using mnhost image)\n')
-    hosts = {
-        'user': '10.0.0.1', 'admin': '10.0.0.2',
-        'h1': '10.0.0.3', 'h2': '10.0.0.4', 'h3': '10.0.0.5', 'h4': '10.0.0.6',
-        'h5': '10.0.0.7', 'h6': '10.0.0.8', 'h7': '10.0.0.9', 'h8': '10.0.0.10'
-    }
-    
+    hosts = {f'h{i}': f'10.0.0.{i}' for i in range(1, 17)}
     docker_hosts = {name: net.addDocker(name, ip=ip, dimage="mnhost") for name, ip in hosts.items()}
 
-    info('*** Adding Switches\n')
-    switches = {f's{i}': net.addSwitch(f's{i}', protocols='OpenFlow14') for i in range(1, 6)}
+    info('*** Adding Switches (Core, Aggregation, Access)\n')
+    
+    # Core switches (two core switches)
+    core_switches = {
+        'core1': net.addSwitch('s1', protocols='OpenFlow14'),
+        'core2': net.addSwitch('s2', protocols='OpenFlow14')
+    }
 
-    info('*** Creating Links\n')
-    net.addLink(docker_hosts['user'], switches['s5'])
-    net.addLink(docker_hosts['admin'], switches['s5'])
+    # Aggregation switches (four aggregation switches)
+    aggregation_switches = {
+        'aggr1': net.addSwitch('s3', protocols='OpenFlow14'),
+        'aggr2': net.addSwitch('s4', protocols='OpenFlow14'),
+        'aggr3': net.addSwitch('s5', protocols='OpenFlow14'),
+        'aggr4': net.addSwitch('s6', protocols='OpenFlow14')
+    }
 
-    for i, switch in enumerate(switches.values(), start=1):
-        if i < 5:
-            net.addLink(switch, docker_hosts[f'h{i*2-1}'])
-            net.addLink(switch, docker_hosts[f'h{i*2}'])
-            net.addLink(switch, switches['s5'])
+    # Access switches (eight access switches)
+    access_switches = {
+        f'acc{i}': net.addSwitch(f's{i+6}', protocols='OpenFlow14') for i in range(1, 9)
+    }
+
+    info('*** Creating Links (Core -> Aggregation -> Access -> Hosts)\n')
+
+    # Core to Aggregation: Redundant links (2 links from each core to each aggregation switch)
+    for core in core_switches.values():
+        for aggr in aggregation_switches.values():
+            net.addLink(core, aggr)  # First link
+            net.addLink(core, aggr)  # Redundant link
+
+    # Aggregation to Access: Redundant links (2 links from each aggregation to each access switch)
+    net.addLink(aggregation_switches['aggr1'], access_switches['acc1'])
+    net.addLink(aggregation_switches['aggr1'], access_switches['acc1'])  # Redundant
+    net.addLink(aggregation_switches['aggr1'], access_switches['acc2'])
+    net.addLink(aggregation_switches['aggr1'], access_switches['acc2'])  # Redundant
+    
+    net.addLink(aggregation_switches['aggr2'], access_switches['acc3'])
+    net.addLink(aggregation_switches['aggr2'], access_switches['acc3'])  # Redundant
+    net.addLink(aggregation_switches['aggr2'], access_switches['acc4'])
+    net.addLink(aggregation_switches['aggr2'], access_switches['acc4'])  # Redundant
+    
+    net.addLink(aggregation_switches['aggr3'], access_switches['acc5'])
+    net.addLink(aggregation_switches['aggr3'], access_switches['acc5'])  # Redundant
+    net.addLink(aggregation_switches['aggr3'], access_switches['acc6'])
+    net.addLink(aggregation_switches['aggr3'], access_switches['acc6'])  # Redundant
+    
+    net.addLink(aggregation_switches['aggr4'], access_switches['acc7'])
+    net.addLink(aggregation_switches['aggr4'], access_switches['acc7'])  # Redundant
+    net.addLink(aggregation_switches['aggr4'], access_switches['acc8'])
+    net.addLink(aggregation_switches['aggr4'], access_switches['acc8'])  # Redundant
+
+    # Access to Hosts: Single links from access to hosts
+    for i in range(1, 9):
+        net.addLink(access_switches[f'acc{i}'], docker_hosts[f'h{2*i-1}'])
+        net.addLink(access_switches[f'acc{i}'], docker_hosts[f'h{2*i}'])
 
     info('*** Starting Network\n')
     net.start()
 
     info('*** Connecting switches to controllers\n')
-    for switch in switches.values():
+    for switch in core_switches.values():
+        switch.start([controller1, controller2, controller3])
+    for switch in aggregation_switches.values():
+        switch.start([controller1, controller2, controller3])
+    for switch in access_switches.values():
         switch.start([controller1, controller2, controller3])
 
     info('*** Running CLI\n')
