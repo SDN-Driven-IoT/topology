@@ -1,3 +1,6 @@
 [submodule "containernet"]
 	path = containernet
 	url = https://github.com/QuintusJoyal/containernet-FORK.git
+[submodule "openflow"]
+	path = openflow
+	url = https://github.com/QuintusJoyal/openflow-FORK.git
